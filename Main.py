@@ -34,7 +34,8 @@ def prepare_dataloader(opt):
 
     trainloader = get_dataloader(train_data, opt.batch_size, shuffle=True)
     testloader = get_dataloader(test_data, opt.batch_size, shuffle=False)
-    return trainloader, testloader, num_types
+    valloader = get_dataloader(dev_data, opt.batch_size, shuffle=False)
+    return trainloader, testloader,valloader, num_types
 
 
 def train_epoch(model, training_data, optimizer, pred_loss_func, opt):
@@ -124,7 +125,7 @@ def eval_epoch(model, validation_data, pred_loss_func, opt):
     return total_event_ll / total_num_event, total_event_rate / total_num_pred, rmse
 
 
-def train(model, training_data, validation_data, optimizer, scheduler, pred_loss_func, opt):
+def train(model, training_data, validation_data, optimizer, scheduler, pred_loss_func, opt, save = False,name = None):
     """ Start training. """
 
     valid_event_losses = []  # validation log-likelihood
@@ -161,9 +162,9 @@ def train(model, training_data, validation_data, optimizer, scheduler, pred_loss
                     .format(epoch=epoch, ll=valid_event, acc=valid_type, rmse=valid_time))
 
         scheduler.step()
-
-data_sets = {'mimic':'data/mimic/'}
-
+    if opt.save:
+        name = opt.data.split('/')[-2]
+        torch.save(model.state_dict(), 'saved_models/'+name)
 
 
 def main():
@@ -189,6 +190,7 @@ def main():
     parser.add_argument('-lr', type=float, default=1e-4)
     parser.add_argument('-smooth', type=float, default=0.1)
     parser.add_argument('-seed', type=int, default=42)
+    parser.add_argument('-save', type=bool, default=False)
 
 
     parser.add_argument('-log', type=str, default='log.txt')
@@ -222,7 +224,7 @@ def main():
     print('[Info] parameters: {}'.format(opt))
 
     """ prepare dataloader """
-    trainloader, testloader, num_types = prepare_dataloader(opt)
+    trainloader, testloader,valloader, num_types = prepare_dataloader(opt)
 
     """ prepare model """
     model = Transformer(

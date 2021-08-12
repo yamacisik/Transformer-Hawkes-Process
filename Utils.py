@@ -73,8 +73,8 @@ def log_likelihood(model, data, time, types):
     event_ll = torch.sum(event_ll, dim=-1)
 
     # non-event log-likelihood, either numerical integration or MC integration
-    # non_event_ll = compute_integral_biased(type_lambda, time, non_pad_mask)
-    non_event_ll = compute_integral_unbiased(model, data, time, non_pad_mask, type_mask)
+    non_event_ll = compute_integral_biased(type_lambda, time, non_pad_mask)
+    # non_event_ll = compute_integral_unbiased(model, data, time, non_pad_mask, type_mask)
     non_event_ll = torch.sum(non_event_ll, dim=-1)
 
     return event_ll, non_event_ll
