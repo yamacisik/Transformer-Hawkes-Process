@@ -17,6 +17,10 @@ class EventData(torch.utils.data.Dataset):
         self.time_gap = [[elem['time_since_last_event'] for elem in inst] for inst in data]
         # plus 1 since there could be event type 0, but we use 0 as padding
         self.event_type = [[elem['type_event'] + 1 for elem in inst] for inst in data]
+        if 'intensities'  in data[0][0].keys():
+            self.intensities = [[elem['intensities'][0]  for elem in inst] for inst in data]
+        else:
+            self.intensities = None
 
         self.length = len(data)
 
@@ -25,7 +29,7 @@ class EventData(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         """ Each returned element is a list, which represents an event stream """
-        return self.time[idx], self.time_gap[idx], self.event_type[idx]
+        return self.time[idx], self.time_gap[idx], self.event_type[idx], self.intensities[idx]
 
 
 def pad_time(insts):
@@ -55,11 +59,12 @@ def pad_type(insts):
 def collate_fn(insts):
     """ Collate function, as required by PyTorch. """
 
-    time, time_gap, event_type = list(zip(*insts))
+    time, time_gap, event_type, intensities = list(zip(*insts))
     time = pad_time(time)
     time_gap = pad_time(time_gap)
     event_type = pad_type(event_type)
-    return time, time_gap, event_type
+    intensities = pad_time(intensities)
+    return time, time_gap, event_type,intensities
 
 
 def get_dataloader(data, batch_size, shuffle=True):

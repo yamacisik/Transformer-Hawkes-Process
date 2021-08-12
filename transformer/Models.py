@@ -48,8 +48,11 @@ class Encoder(nn.Module):
 
         # position vector, used for temporal encoding
         self.position_vec = torch.tensor(
-            [math.pow(10000.0, 2.0 * (i // 2) / d_model) for i in range(d_model)],
-            device=torch.device('cuda'))
+            [math.pow(10000.0, 2.0 * (i // 2) / d_model) for i in range(d_model)])
+        #
+        # self.position_vec = torch.tensor(
+        #     [math.pow(10000.0, 2.0 * (i // 2) / d_model) for i in range(d_model)],
+        #     device=torch.device('cuda'))
 
         # event type embedding
         self.event_emb = nn.Embedding(num_types + 1, d_model, padding_idx=Constants.PAD)
@@ -64,6 +67,7 @@ class Encoder(nn.Module):
         Output: batch*seq_len*d_model.
         """
 
+        self.position_vec=  self.position_vec.to(time.device)
         result = time.unsqueeze(-1) / self.position_vec
         result[:, :, 0::2] = torch.sin(result[:, :, 0::2])
         result[:, :, 1::2] = torch.cos(result[:, :, 1::2])
@@ -137,7 +141,7 @@ class Transformer(nn.Module):
             num_types, d_model=256, d_rnn=128, d_inner=1024,
             n_layers=4, n_head=4, d_k=64, d_v=64, dropout=0.1):
         super().__init__()
-
+        self.n_dimension = num_types
         self.encoder = Encoder(
             num_types=num_types,
             d_model=d_model,
