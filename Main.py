@@ -12,6 +12,7 @@ import Utils
 from preprocess.Dataset import get_dataloader
 from transformer.Models import Transformer
 from tqdm import tqdm
+import random
 
 
 def prepare_dataloader(opt):
@@ -161,6 +162,9 @@ def train(model, training_data, validation_data, optimizer, scheduler, pred_loss
 
         scheduler.step()
 
+data_sets = {'mimic':'data/mimic/'}
+
+
 
 def main():
     """ Main function. """
@@ -184,13 +188,32 @@ def main():
     parser.add_argument('-dropout', type=float, default=0.1)
     parser.add_argument('-lr', type=float, default=1e-4)
     parser.add_argument('-smooth', type=float, default=0.1)
+    parser.add_argument('-seed', type=int, default=42)
+
 
     parser.add_argument('-log', type=str, default='log.txt')
 
     opt = parser.parse_args()
 
+    # ------Reproducibility-------
+
+    torch.manual_seed(opt.seed)
+    random.seed(opt.seed)
+    np.random.seed(opt.seed)
+    # use_cuda = torch.cuda.is_available()
+    if torch.cuda.is_available():
+        device = 'cuda'
+        # torch.set_default_tensor_type(cuda_tensor)
+        torch.cuda.manual_seed(seed=opt.seed)
+        torch.cuda.manual_seed_all(opt.seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    else:
+        # torch.set_default_tensor_type(cpu_tensor)
+        device = 'cpu'
+
     # default device is CUDA
-    opt.device = torch.device('cuda')
+    opt.device = torch.device(device)
 
     # setup the log file
     with open(opt.log, 'w') as f:
