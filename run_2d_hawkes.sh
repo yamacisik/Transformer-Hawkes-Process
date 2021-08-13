@@ -1,7 +1,7 @@
 #!/bin/bash
 device=0
 data=data/simulated/2_d_hawkes/
-batch=16
+batch=4
 n_head=1
 n_layers=1
 d_model=16
