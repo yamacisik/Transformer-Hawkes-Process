@@ -5,6 +5,7 @@ import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import csv
 
 import transformer.Constants as Constants
 import Utils
@@ -35,7 +36,7 @@ def prepare_dataloader(opt):
     trainloader = get_dataloader(train_data, opt.batch_size, shuffle=True)
     testloader = get_dataloader(test_data, opt.batch_size, shuffle=False)
     valloader = get_dataloader(dev_data, opt.batch_size, shuffle=False)
-    return trainloader, testloader,valloader, num_types
+    return trainloader, testloader, valloader, num_types
 
 
 def train_epoch(model, training_data, optimizer, pred_loss_func, opt):
@@ -51,7 +52,7 @@ def train_epoch(model, training_data, optimizer, pred_loss_func, opt):
     for batch in tqdm(training_data, mininterval=2,
                       desc='  - (Training)   ', leave=False):
         """ prepare data """
-        event_time, time_gap, event_type,_ = map(lambda x: x.to(opt.device), batch)
+        event_time, time_gap, event_type, _ = map(lambda x: x.to(opt.device), batch)
 
         """ forward """
         optimizer.zero_grad()
@@ -72,7 +73,7 @@ def train_epoch(model, training_data, optimizer, pred_loss_func, opt):
         # SE is usually large, scale it to stabilize training
         scale_time_loss = 100
 
-        if model.n_dimension<2:
+        if model.n_dimension < 2:
             loss = event_loss + se / scale_time_loss
         else:
             loss = event_loss + pred_loss + se / scale_time_loss
@@ -107,7 +108,7 @@ def eval_epoch(model, validation_data, pred_loss_func, opt):
         for batch in tqdm(validation_data, mininterval=2,
                           desc='  - (Validation) ', leave=False):
             """ prepare data """
-            event_time, time_gap, event_type,_ = map(lambda x: x.to(opt.device), batch)
+            event_time, time_gap, event_type, _ = map(lambda x: x.to(opt.device), batch)
 
             """ forward """
             enc_out, prediction = model(event_type, event_time)
@@ -129,7 +130,7 @@ def eval_epoch(model, validation_data, pred_loss_func, opt):
     return total_event_ll / total_num_event, total_event_rate / total_num_pred, rmse
 
 
-def train(model, training_data, validation_data, optimizer, scheduler, pred_loss_func, opt, save = False,name = None):
+def train(model, training_data, validation_data, optimizer, scheduler, pred_loss_func, opt):
     """ Start training. """
 
     valid_event_losses = []  # validation log-likelihood
@@ -166,9 +167,19 @@ def train(model, training_data, validation_data, optimizer, scheduler, pred_loss
                     .format(epoch=epoch, ll=valid_event, acc=valid_type, rmse=valid_time))
 
         scheduler.step()
+    best_loss = max(valid_event_losses)
+    best_rmse = max(valid_rmse)
+    best_accuracy = max(valid_pred_losses)
+
+    name = opt.data.split('/')[-2]
+    results_to_record = [str(name), str(best_loss), str(best_rmse), str(best_accuracy)]
+
+    with open(r'results.csv', 'a', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(results_to_record)
+
     if opt.save:
-        name = opt.data.split('/')[-2]
-        torch.save(model.state_dict(), 'saved_models/'+name)
+        torch.save(model.state_dict(), 'saved_models/' + name)
 
 
 def main():
@@ -195,7 +206,6 @@ def main():
     parser.add_argument('-smooth', type=float, default=0.1)
     parser.add_argument('-seed', type=int, default=42)
     parser.add_argument('-save', type=bool, default=False)
-
 
     parser.add_argument('-log', type=str, default='log.txt')
 
@@ -228,7 +238,7 @@ def main():
     print('[Info] parameters: {}'.format(opt))
 
     """ prepare dataloader """
-    trainloader, testloader,valloader, num_types = prepare_dataloader(opt)
+    trainloader, testloader, valloader, num_types = prepare_dataloader(opt)
 
     """ prepare model """
     model = Transformer(
