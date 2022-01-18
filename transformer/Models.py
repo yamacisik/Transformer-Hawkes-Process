@@ -110,6 +110,20 @@ class Predictor(nn.Module):
         return out
 
 
+class time_Predictor(nn.Module):
+    """ Prediction of next event type. """
+
+    def __init__(self, dim, num_types):
+        super().__init__()
+
+        self.linear = nn.Linear(dim, num_types, bias=False)
+        nn.init.xavier_normal_(self.linear.weight)
+
+    def forward(self, data, non_pad_mask):
+        out = F.softplus(self.linear(data))
+        out = out * non_pad_mask
+        return out
+
 class RNN_layers(nn.Module):
     """
     Optional recurrent layers. This is inspired by the fact that adding
@@ -168,7 +182,7 @@ class Transformer(nn.Module):
         self.rnn = RNN_layers(d_model, d_rnn)
 
         # prediction of next time stamp
-        self.time_predictor = Predictor(d_model, 1)
+        self.time_predictor = time_Predictor(d_model, 1)
 
         # prediction of next event type
         self.type_predictor = Predictor(d_model, num_types)

@@ -84,6 +84,8 @@ def type_loss(prediction, types, loss_func):
     """ Event prediction loss, cross entropy or label smoothing. """
 
     # convert [1,2,3] based types to [0,1,2]; also convert padding events to -1
+    actual_types = []
+    predicted_types = []
     truth = types[:, 1:] - 1
     prediction = prediction[:, :-1, :]
 

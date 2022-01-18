@@ -14,6 +14,7 @@ from preprocess.Dataset import get_dataloader
 from transformer.Models import Transformer
 from tqdm import tqdm
 import random
+import secrets
 
 
 def prepare_dataloader(opt):
@@ -53,6 +54,8 @@ def train_epoch(model, training_data, optimizer, pred_loss_func, opt):
                       desc='  - (Training)   ', leave=False):
         """ prepare data """
         event_time, time_gap, event_type, _ = map(lambda x: x.to(opt.device), batch)
+        if opt.d_cov==0:
+            covariates = None
 
         """ forward """
         optimizer.zero_grad()
@@ -111,6 +114,7 @@ def eval_epoch(model, validation_data, pred_loss_func, opt):
             event_time, time_gap, event_type, _ = map(lambda x: x.to(opt.device), batch)
 
             """ forward """
+
             enc_out, prediction = model(event_type, event_time)
 
             """ compute loss """
@@ -136,6 +140,7 @@ def train(model, training_data, validation_data, optimizer, scheduler, pred_loss
     valid_event_losses = []  # validation log-likelihood
     valid_pred_losses = []  # validation event type prediction accuracy
     valid_rmse = []  # validation event time prediction RMSE
+    times = []
     for epoch_i in range(opt.epoch):
         epoch = epoch_i + 1
         print('[ Epoch', epoch, ']')
@@ -146,7 +151,7 @@ def train(model, training_data, validation_data, optimizer, scheduler, pred_loss
               'accuracy: {type: 8.5f}, RMSE: {rmse: 8.5f}, '
               'elapse: {elapse:3.3f} min'
               .format(ll=train_event, type=train_type, rmse=train_time, elapse=(time.time() - start) / 60))
-
+        times.append(time.time() - start)
         start = time.time()
         valid_event, valid_type, valid_time = eval_epoch(model, validation_data, pred_loss_func, opt)
         print('  - (Testing)     loglikelihood: {ll: 8.5f}, '
@@ -161,6 +166,7 @@ def train(model, training_data, validation_data, optimizer, scheduler, pred_loss
               'Maximum accuracy: {pred: 8.5f}, Minimum RMSE: {rmse: 8.5f}'
               .format(event=max(valid_event_losses), pred=max(valid_pred_losses), rmse=min(valid_rmse)))
 
+
         # logging
         with open(opt.log, 'a') as f:
             f.write('{epoch}, {ll: 8.5f}, {acc: 8.5f}, {rmse: 8.5f}\n'
@@ -172,14 +178,16 @@ def train(model, training_data, validation_data, optimizer, scheduler, pred_loss
     best_accuracy = max(valid_pred_losses)
 
     name = opt.data.split('/')[-2]
-    results_to_record = [str(name), str(best_loss), str(best_rmse), str(best_accuracy)]
+    model_name = secrets.token_hex(5)
+
+    results_to_record = [str(name), str(best_loss), str(best_rmse), str(best_accuracy),str(opt.epoch),str(opt.lr),str(model_name),str(np.mean(times))]
 
     with open(r'results.csv', 'a', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(results_to_record)
 
     if opt.save:
-        torch.save(model.state_dict(), 'saved_models/' + name)
+        torch.save(model.state_dict(), 'saved_models/' + model_name)
 
 
 def main():
@@ -197,6 +205,7 @@ def main():
     parser.add_argument('-d_inner_hid', type=int, default=128)
     parser.add_argument('-d_k', type=int, default=16)
     parser.add_argument('-d_v', type=int, default=16)
+    parser.add_argument('-d_cov', type=int, default=0)
 
     parser.add_argument('-n_head', type=int, default=4)
     parser.add_argument('-n_layers', type=int, default=4)
@@ -205,7 +214,7 @@ def main():
     parser.add_argument('-lr', type=float, default=1e-4)
     parser.add_argument('-smooth', type=float, default=0.1)
     parser.add_argument('-seed', type=int, default=42)
-    parser.add_argument('-save', type=bool, default=False)
+    parser.add_argument('-save', type=bool, default=True)
 
     parser.add_argument('-log', type=str, default='log.txt')
 
@@ -222,14 +231,17 @@ def main():
         # torch.set_default_tensor_type(cuda_tensor)
         torch.cuda.manual_seed(seed=opt.seed)
         torch.cuda.manual_seed_all(opt.seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+        # torch.backends.cudnn.deterministic = True
+        # torch.backends.cudnn.benchmark = False
     else:
         # torch.set_default_tensor_type(cpu_tensor)
         device = 'cpu'
 
     # default device is CUDA
     opt.device = torch.device(device)
+
+    if opt.data =='data/covid_cov/':
+        opt.d_cov = 16
 
     # setup the log file
     with open(opt.log, 'w') as f:
@@ -239,6 +251,7 @@ def main():
 
     """ prepare dataloader """
     trainloader, testloader, valloader, num_types = prepare_dataloader(opt)
+
 
     """ prepare model """
     model = Transformer(
@@ -250,8 +263,7 @@ def main():
         n_head=opt.n_head,
         d_k=opt.d_k,
         d_v=opt.d_v,
-        dropout=opt.dropout,
-    )
+        dropout=opt.dropout)
     model.to(opt.device)
 
     """ optimizer and scheduler """
@@ -270,7 +282,15 @@ def main():
     print('[Info] Number of parameters: {}'.format(num_params))
 
     """ train the model """
-    train(model, trainloader, testloader, optimizer, scheduler, pred_loss_func, opt)
+    print(opt.data)
+    train(model, trainloader, valloader, optimizer, scheduler, pred_loss_func, opt)
+
+    """Results on the Test Data"""
+
+    test_event, test_type, test_time = eval_epoch(model, testloader, pred_loss_func, opt)
+    print('  - (Results on the Final Test Data)     loglikelihood: {ll: 8.5f}, '
+          'accuracy: {type: 8.5f}, RMSE: {rmse: 8.5f}, '
+          .format(ll=test_event, type=test_type, rmse=test_time))
 
 
 if __name__ == '__main__':
